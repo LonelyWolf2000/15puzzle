@@ -1,25 +1,34 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Linq;
-using puzzle15;
 using UnityEngine;
 using UnityEngine.UI;
-using UnityScript.Lang;
 using Random = System.Random;
 
 namespace puzzle15
 {
+    public enum Difficult
+    {
+        Trollbuster = 1,
+        Returd = 10,
+        Easy = 25,
+        Normal = 50,
+        Hard = 100,
+        VeryHard = 150
+    }
+
     public class GameController : MonoBehaviour, IGameController
     {
-        public int Level = 5;
+        public Difficult Difficult = Difficult.Returd;
         public int Size = 4;
         public float SpeedShuffle = 0.25f;
 
+        public SoundManager SoundManager;
         public Button btn_Start;
         public Button btn_Restart;
         public Text txt_Steps;
         public Text txt_Time;
+        public WinWindow WinWindow;
+        public bool Pause { get; set; }
 
         private ChipComponent[] _chipsInScene;
         private ILogic _logicGame;
@@ -96,17 +105,18 @@ namespace puzzle15
 
         public void StartGame()
         {
-            InitGame(Level, Size);
+            InitGame((int)Difficult, Size);
 
             btn_Start.transform.gameObject.SetActive(false);
             btn_Restart.transform.gameObject.SetActive(true);
-
+            
             Timer();
         }
 
         public void ReStartGame()
         {
             _isGameReady = false;
+            HideWinWindow();
 
             foreach (var ch in _chipsInScene)
                 ch.ResetPosition();
@@ -115,7 +125,7 @@ namespace puzzle15
             _SetValuesChipsComponents();
             countSteps = 0;
 
-            StartCoroutine(_Shuffle(_logicGame, Level));
+            StartCoroutine(_Shuffle(_logicGame, (int)Difficult));
             Timer();
         }
 
@@ -126,12 +136,14 @@ namespace puzzle15
 
             _SwapPos(sender.transform, _emptyCellPos.transform);
             Steps();
+            SoundManager.ShufflePlay();
 
             if (_logicGame.CheckWin())
             {
-                Debug.Log("Win");
                 StopCoroutine(_timerRoutine);
                 _isGameReady = false;
+                WinWindow.ShowWin();
+                SoundManager.SuccessPlay();
             }
 
             return true;
@@ -154,7 +166,16 @@ namespace puzzle15
                 StopCoroutine(_timerRoutine);
 
             _timerRoutine = StartCoroutine(_Timer());
+        }
 
+        public void HideWinWindow()
+        {
+            WinWindow.HideWin();
+        }
+
+        public void QuitGame()
+        {
+            Application.Quit();
         }
 
         //--------------------------------------------------------------------------
@@ -177,7 +198,7 @@ namespace puzzle15
             while (true)
             {
                 yield return new WaitForSeconds(0.1f);
-                if(!_isGameReady)
+                if(!_isGameReady || Pause)
                     continue;
 
                 ms = ms + 10;
@@ -222,11 +243,13 @@ namespace puzzle15
                 lastValShuffled = tempCh.Value;
                 _logicGame.MoveChip(tempCh);
                 _SwapPos(_chipsInScene[tempCh.Value - 1].transform, _emptyCellPos.transform);
+                SoundManager.ShufflePlay();
             }
 
             btn_Start.enabled = true;
             btn_Restart.enabled = true;
             _isGameReady = true;
+            SoundManager.StartingPlay();
         }
 
         private void _SwapPos(Transform chA, Transform chB)
